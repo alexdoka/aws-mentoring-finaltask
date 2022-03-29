@@ -151,56 +151,76 @@ resource "aws_efs_access_point" "test" {
   file_system_id = var.efs_id
 }
 
+resource "aws_efs_access_point" "test2" {
+  file_system_id = var.efs_id
+  posix_user {
+    gid = 1000
+    uid = 1000
+  }
+  root_directory {
+    path = "/var/lib/ghost/content"
+    creation_info {
+      owner_gid   = 1000
+      owner_uid   = 1000
+      permissions = 777
+    }    
+  }
+}
+
+data "aws_ssm_parameter" "rds_password" {
+  name = var.db_password_path
+}
+
 resource "aws_ecs_task_definition" "service" {
   family = "ghost-service"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 1024
-  # execution_role_arn       = data.aws_iam_role.ecs_task_execution_role.arn
   execution_role_arn       = var.mainrole_arn
   task_role_arn            = var.mainrole_arn
-  container_definitions = jsonencode([
-    {
-      name      = "ghost-svc"
-      image     = "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/ghost:latest"
-      cpu       = 256
-      memory    = 1024
-      essential = true
-      environment = [
-        {"name": "database__connection__host", "value": var.rds_endpoint},
-        {"name": "database__connection__user", "value": "gh_user"},
-        {"name": "database__connection__password", "value": "supermegapassword1!"},
-        {"name": "database__connection__database", "value": "gh_db"}
-        ]
-      portMappings = [
+
+  container_definitions = <<TASK_DEFINITION
+[
+  {
+    "name": "ghost-svc",
+    "image": "${local.account_id}.dkr.ecr.${local.region}.amazonaws.com/ghost:latest",
+    "cpu": 256,
+    "memory": 1024,
+    "essential": true,
+    "environment": [
+      {"name": "database__connection__host", "value": "${var.rds_endpoint}"},
+      {"name": "database__connection__user", "value": "gh_user"},
+      {"name": "database__connection__password", "value": "${data.aws_ssm_parameter.rds_password.value}"},
+      {"name": "database__connection__database", "value": "gh_db"}
+    ],
+    "mountPoints": [
         {
-          containerPort = 2368
-          hostPort      = 2368
+            "containerPath": "/var/lib/ghost/content",
+            "sourceVolume": "service-storage"
         }
-      ]
-    }
-  ])
+    ],    
+    "portMappings": [
+      {
+        "containerPort": 2368,
+        "hostPort": 2368
+      }
+    ]      
+  }
+]
+TASK_DEFINITION
 
-  # volume {
-  #    name = "service-storage"
-
-  #    efs_volume_configuration {
-  #      file_system_id          = var.efs_id
-  #      root_directory          = "/var/lib/ghost/content"
-  #   #    transit_encryption      = "ENABLED"
-  #   #    transit_encryption_port = 2999
-  #   #    authorization_config {
-  #   #      access_point_id = aws_efs_access_point.test.id
-  #   #      iam             = "ENABLED"
-  #   #    }
-  #    }
-  #  }
-
-  # placement_constraints {
-  #   type       = "memberOf"
-  #   expression = "attribute:ecs.availability-zone in tolist(${var.private_nets})"
-  # }
+  volume {
+     name = "service-storage"
+     efs_volume_configuration {
+       file_system_id          = var.efs_id
+       root_directory          = "/var/lib/ghost/content"
+       transit_encryption      = "ENABLED"
+       authorization_config {
+         access_point_id = aws_efs_access_point.test2.id
+       }
+     }
+   }
 }
 
 resource "aws_lb_target_group" "ecr" {

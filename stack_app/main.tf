@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 3.0"
+      version = "~> 4.0"
     }
     null = {
       source = "hashicorp/null"
@@ -62,4 +62,5 @@ module "app" {
   ec2_pool_sg              = module.sg.ec2_pool
   rds_endpoint             = module.rds.rds_endpoint
   efs_id                   = module.efs.efs_id
+  db_password_path         = "/finaltask/db-password"
 }

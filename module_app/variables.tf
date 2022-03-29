@@ -12,3 +12,4 @@ variable "ec2_type" {
 variable "ec2_pool_sg" {}
 variable "rds_endpoint" {}
 variable "efs_id" {}
+variable "db_password_path" {}
