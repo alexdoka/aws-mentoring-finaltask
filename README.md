@@ -7,5 +7,6 @@ aws configure
 3. And before deploying you have to have locally docker image **ghost:latest**
 4. Go to folder stack_app and run 
 ```bash
+terraform init
 terraform apply
 ```
